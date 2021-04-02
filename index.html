@@ -1,0 +1,161 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="UTF-8">
+	<style>
+	
+	h1 {
+		text-align: center; 
+		color: #038C9E; 
+		font-size: 28px; 
+		font-family: 'Source Sans Pro', sans-serif;
+		margin-bottom: 7px;
+	}
+		
+	.svgBox {
+		background-color: #038C9E;
+	}
+	
+	#Singapore {
+		stroke-width: 0.4px;
+		stroke: white;
+	}
+	
+	#legend {
+		font-size: 12px;
+		font-weight: bold;
+	}
+	
+	#palette {
+		stroke-width: 0.4px;
+		stroke: black;
+	}
+	
+	#breaks {
+		text-anchor: middle;
+		font-size: 9px;
+		font-weight: bold;
+	}
+		
+	</style>
+</head>
+<body>
+<script src="https://d3js.org/d3.v6.min.js"></script>
+<h1>Choropleth Map of 2020 Male Population in Singapore Subdistricts</h1>
+<script>
+  let width = 960,
+    height = 500;
+		
+	let svg = d3.select("body").append("svg")
+		.attr("viewBox", "0 0 " + width + " " + height)
+		.classed("svgBox", true);
+		
+	let legend = svg.append("g")
+		.attr("id", "legend")
+		.append("text")
+		.text("Population")
+		.attr("x", "10")
+		.attr("y", "15");
+
+	Promise.all([d3.json("Master-Plan-2014-Subzone-Boundary.json"), d3.csv("population2020.csv")]).then(data => {
+		
+		//data[0].features.forEach(ele => console.log(ele));
+		//data[1].forEach(ele => console.log(ele));
+		
+		/*for each district in json, search equivalent Subzone column from population2020.csv
+		print out district in json that has no match in csv
+		for those that match, create a new attribute in json object and assign corresponding PopMale value from csv.*/
+		data[0].features.forEach( district => {
+			let result = data[1].filter( pop => {
+				return pop.Subzone === district.properties.Name
+			});
+			if (typeof result[0] === "undefined") {
+				district.properties.popMale = null;
+			} else {
+				district.properties.popMale = (result[0].PopMale === "-") ? null: result[0].PopMale;
+			}
+		});
+		//console.log(data[0].features);
+				
+		let projection = d3.geoMercator()
+			.center([103.851959, 1.290270])
+			.fitExtent([[20, 20], [960, 500]], data[0]);
+			
+		let geopath = d3.geoPath().projection(projection);
+		
+		data[1].forEach( d => {
+			d.PopMale = +d.PopMale; //convert column from string to integer
+		});
+		let max = d3.max(data[1], d => { return d.PopMale; }); //extract minimum popMale value
+		let min = d3.min(data[1], d => { return d.PopMale; }); //extract maximum popMale value
+		
+		//console.log(min);
+		//console.log(max);
+		let colourScale = d3.schemeBlues[9];
+		
+		let colour = d3.scaleQuantize()
+			.domain([min, 10000]) //scale becomes too skewed if use max
+			.range(colourScale);
+
+		svg.append("g")
+			.attr("id", "Singapore")
+			.selectAll("path")
+			.data(data[0].features)
+			.enter()
+			.append("path")
+			.attr("d",  d => geopath(d))
+			.attr("fill", d => {
+				return colour(d.properties.popMale); 
+			});
+		
+		//insert colour scale bar
+		let palette = svg.append("g")
+			.attr("id","palette")
+			.selectAll("rect")
+			.data(colourScale)
+			.enter()
+			.append("rect")
+			.attr("fill", d => {
+					return d;//return rgb
+			})
+			.attr('x',(d,i) => {
+				return i*30 + 10;
+			})
+			.attr("y", "20")			
+			.attr('width','30')
+			.attr('height','10');
+		
+		//insert colour scale break values
+		let texts = svg.append("g")
+			.attr("id","breaks")
+			.selectAll("rect")
+			.data(colour.range())
+			.enter()
+			.append("text")
+			.attr("y", "40")
+			.attr("x", (d,i) => {
+				return i*30 + 10;
+			})
+			.text(d => {
+				return Math.round(colour.invertExtent(d)[0]); //to access break values
+			})
+		
+		/*var texts = palette
+			.append("text")
+			.attr("font-size", "10px")
+			.attr("color", "red")
+			.attr("font-size", "20")
+			.attr("dy", 40)
+			.attr("x", function(d, i) {
+				return i*30 + 35;
+			})
+			.text(d => {
+				return colour.invertExtent(d)[0]; //why doesn't the texts if I append text to palette?
+			})*/
+
+		
+	});
+	
+</script>
+</body>
+</html>
